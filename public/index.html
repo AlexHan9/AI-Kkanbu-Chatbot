@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Kkanbu Chatbot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar for a sleeker look */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+        
+        .typing-indicator::after {
+            content: '▌';
+            animation: blink 1s step-start infinite;
+        }
+        
+        @keyframes blink {
+            50% { opacity: 0; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 h-screen flex flex-col items-center justify-center p-4">
+
+    <div class="bg-white w-full max-w-2xl rounded-2xl shadow-xl flex flex-col h-[85vh] overflow-hidden">
+        
+        <!-- Header -->
+        <div class="bg-indigo-600 text-white p-4 flex justify-between items-center shadow-md z-10">
+            <h1 class="text-xl font-bold flex items-center gap-2">
+                <span>💬</span> AI Kkanbu
+            </h1>
+            <div>
+                <select id="personaSelect" class="bg-indigo-500 text-white text-sm rounded-lg focus:ring-indigo-300 focus:border-indigo-300 block w-full p-2 border-none outline-none cursor-pointer font-medium">
+                    <option value="empathetic">🤍 Empathetic Supporter</option>
+                    <option value="motivator">🚀 Energetic Motivator</option>
+                    <option value="intellectual">📚 Intellectual Partner</option>
+                    <option value="tsundere">🙄 Playful Tsundere</option>
+                    <option value="quirky">🪩 Quirky Free Spirit</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Chat History -->
+        <div id="chatHistory" class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 flex flex-col">
+            <!-- Initial welcome message -->
+            <div class="flex justify-start">
+                <div class="bg-white text-gray-800 rounded-2xl rounded-tl-sm px-4 py-2 max-w-[80%] shadow-sm border border-gray-100">
+                    <p class="text-sm">Hey! I'm your AI Kkanbu. Pick a persona up top and let's chat! 👋</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="p-4 bg-white border-t border-gray-200">
+            <form id="chatForm" class="flex gap-2">
+                <input type="text" id="messageInput" 
+                    class="flex-1 bg-gray-100 border-0 text-gray-900 text-sm rounded-full focus:ring-2 focus:ring-indigo-500 focus:bg-white block w-full p-3 px-5 transition-colors" 
+                    placeholder="Type your message..." required autocomplete="off">
+                <button type="submit" id="sendBtn"
+                    class="text-white bg-indigo-600 hover:bg-indigo-700 focus:ring-4 focus:outline-none focus:ring-indigo-300 font-medium rounded-full text-sm p-3 inline-flex items-center justify-center w-12 h-12 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    <svg class="w-5 h-5 transform rotate-90" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 18 20">
+                        <path d="m17.914 18.594-8-18a1 1 0 0 0-1.828 0l-8 18a1 1 0 0 0 1.157 1.376L8 18.281V9a1 1 0 0 1 2 0v9.281l6.758 1.689a1 1 0 0 0 1.156-1.376Z"/>
+                    </svg>
+                    <span class="sr-only">Send</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Generate a random UUID for the session
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        // Initialize Session ID
+        let currentSessionId = localStorage.getItem('chatSessionId');
+        if (!currentSessionId) {
+            currentSessionId = generateUUID();
+            localStorage.setItem('chatSessionId', currentSessionId);
+            console.log("New session started:", currentSessionId);
+        } else {
+            console.log("Resuming session:", currentSessionId);
+        }
+
+        // When persona changes, we could optionally start a new session, 
+        // but for now let's keep the same session and just change the prompt context.
+        document.getElementById('personaSelect').addEventListener('change', () => {
+            // Optional: currentSessionId = generateUUID(); localStorage.setItem('chatSessionId', currentSessionId);
+            addSystemMessage(`Switched persona to: ${document.getElementById('personaSelect').options[document.getElementById('personaSelect').selectedIndex].text}`);
+        });
+
+        const chatForm = document.getElementById('chatForm');
+        const messageInput = document.getElementById('messageInput');
+        const chatHistory = document.getElementById('chatHistory');
+        const sendBtn = document.getElementById('sendBtn');
+        const personaSelect = document.getElementById('personaSelect');
+
+        function scrollToBottom() {
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+
+        function addUserMessage(text) {
+            const div = document.createElement('div');
+            div.className = 'flex justify-end';
+            div.innerHTML = `
+                <div class="bg-indigo-600 text-white rounded-2xl rounded-tr-sm px-4 py-2 max-w-[80%] shadow-sm">
+                    <p class="text-sm whitespace-pre-wrap">${escapeHTML(text)}</p>
+                </div>
+            `;
+            chatHistory.appendChild(div);
+            scrollToBottom();
+        }
+
+        function addSystemMessage(text) {
+            const div = document.createElement('div');
+            div.className = 'flex justify-center my-2';
+            div.innerHTML = `
+                <div class="bg-gray-200 text-gray-600 rounded-full px-4 py-1 text-xs font-medium">
+                    ${escapeHTML(text)}
+                </div>
+            `;
+            chatHistory.appendChild(div);
+            scrollToBottom();
+        }
+
+        function createAssistantMessageBubble() {
+            const div = document.createElement('div');
+            div.className = 'flex justify-start';
+            
+            const bubble = document.createElement('div');
+            bubble.className = 'bg-white text-gray-800 rounded-2xl rounded-tl-sm px-4 py-2 max-w-[80%] shadow-sm border border-gray-100';
+            
+            const textP = document.createElement('p');
+            textP.className = 'text-sm whitespace-pre-wrap typing-indicator';
+            
+            bubble.appendChild(textP);
+            div.appendChild(bubble);
+            chatHistory.appendChild(div);
+            scrollToBottom();
+            
+            return { container: div, textElement: textP };
+        }
+
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, 
+                tag => ({
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    "'": '&#39;',
+                    '"': '&quot;'
+                }[tag])
+            );
+        }
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const message = messageInput.value.trim();
+            if (!message) return;
+            
+            const personaId = personaSelect.value;
+
+            // UI Updates
+            addUserMessage(message);
+            messageInput.value = '';
+            messageInput.disabled = true;
+            sendBtn.disabled = true;
+
+            const assistantBubble = createAssistantMessageBubble();
+            let fullResponseText = "";
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        sessionId: currentSessionId,
+                        personaId: personaId
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder("utf-8");
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value, { stream: true });
+                    const lines = chunk.split('\n\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const dataStr = line.replace('data: ', '').trim();
+                            if (dataStr === '[DONE]') {
+                                assistantBubble.textElement.classList.remove('typing-indicator');
+                                break;
+                            }
+                            
+                            try {
+                                const dataObj = JSON.parse(dataStr);
+                                if (dataObj.error) {
+                                     fullResponseText += "\n[Error: " + dataObj.error + "]";
+                                } else if (dataObj.text) {
+                                    fullResponseText += dataObj.text;
+                                }
+                                assistantBubble.textElement.textContent = fullResponseText;
+                                scrollToBottom();
+                            } catch (e) {
+                                console.error("Error parsing stream chunk", e, dataStr);
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching chat:', error);
+                assistantBubble.textElement.textContent = "Oops! Something went wrong trying to connect to the server.";
+                assistantBubble.textElement.classList.remove('typing-indicator');
+            } finally {
+                messageInput.disabled = false;
+                sendBtn.disabled = false;
+                messageInput.focus();
+                assistantBubble.textElement.classList.remove('typing-indicator');
+            }
+        });
+    </script>
+</body>
+</html>
